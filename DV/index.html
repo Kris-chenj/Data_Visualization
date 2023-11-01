@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html>
+<meta charset="UTF-8">
+<style>
+
+/* body {
+  font: 10px sans-serif;
+}
+
+.chart { 
+  background: #fff;
+}
+
+p {
+  font: 12px helvetica;
+} */
+
+
+.axis path, .axis line {
+  fill: none;
+  stroke: darkgray;
+  stroke-width: 3px;
+  image-rendering: crisp-edges;
+}
+
+/* button {
+  position: absolute;
+  right: 50px;
+  top: 10px;
+} */
+
+.theme-river {
+    position: relative;
+    margin-left: 8px;
+    margin-top:16px;
+
+}
+
+.theme-river-tooltip {
+    position: absolute;
+    z-index: 20;
+    margin-top: 32px;
+    margin-left: 24px;
+
+    background-color: #06c;
+    height: 58px !important;
+    width: 96px !important;
+    border-radius: 12px;
+    text-align: center;
+    color: white;
+    transition: 225ms;
+    box-shadow: 0 4px 4px rgba(0, 0, 0, 0.2);
+}
+
+.theme-river-tooltip p {
+    margin: 8px;
+}
+
+.box {
+    background-color: #eeeeee;
+    border-radius: 8px;
+    transition: 175ms;
+    user-select: none;
+}
+
+.box:hover {
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+}
+
+.map {
+    margin-top: 16px;
+    margin-left: 8px;
+    border-radius: 8px;
+    width: 50vw;
+    height: 65vh;
+}
+
+.trajectory-container {
+    margin-left: 16px;
+    margin-top: 16px;
+    
+    width: 19vw;
+    height: 65vh;
+    border-radius: 8px;
+}
+
+.trajectory-list {
+    height: calc(100% - 216px);
+    overflow-y: auto;
+    margin-right: 0;
+}
+
+.trajectory-item {
+    width: auto;
+    height: 80px;
+    background-color: #ddd;
+    margin: 8px;
+
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+
+    font-weight: 200;
+}
+
+.trajectory-item:hover {
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+.trajectory-icon {
+    color: white;
+    font-size:  1.6em;
+    font-weight: 800;
+    height: 48px;
+    width: 48px;
+    line-height: 48px;
+    text-align: center;
+    vertical-align: middle;
+    background-color: rgb(146, 146, 146);
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.1);
+    border-radius: 12px;
+    margin: 8px;
+}
+
+.trajectory-tag {
+    height: 12px;
+    line-height: 12px;
+    font-size: 0.9em;
+    text-align: center;
+    color: white;
+    font-weight: 400;
+    border-radius: 4px;
+    padding: 1px 8px;
+}
+
+.container {
+    display: flex;
+    flex-direction: row;
+}
+
+.trajectory-chart {
+    width: 100%;
+    height: 200px;
+}
+
+</style>
+<body>
+    <div class="main-container">
+        <div id="container" class="container">
+            <div id="map" class="map box"></div>
+            <div id="trajectory_container" class="box trajectory-container">
+                <div id="trajectory_chart_container">
+                    <svg id="trajectory_chart" class="trajectory-chart"></svg></div>
+                <div id="trajectory_list" class="trajectory-list"></div>
+            </div>
+        </div>
+        <div class="theme_river_chart"></div>
+    </div>
+</body>
+<script src="https://d3js.org/d3.v4.min.js"></script>
+<script>
+var d3v4 = window.d3
+</script>
+<script src="d3-scale-radial.js"></script>
+<!-- basic settings -->
+<script>
+// var map_margin = {top: 20, right: 20, bottom: 20, left: 20};
+// var map_width = 1000, map_height = 1000;
+// var map_svg = d3v4.select("body").append("svg")
+//     .attr("id","map_svg")
+//     .attr("width", map_width)
+//     .attr("height", map_height)
+//     .attr("font-family","sans-serif")
+//     .attr("font-size","10")
+//     .style("position", "absolute")
+//     .style("top", "0px")
+//     .style("left", "0px")
+
+var trace_margin = {top: 20, right: 20, bottom: 20, left: 20};
+var trace_width = parseInt(0.4 * window.innerHeight);
+var trace_height = trace_width;
+var trace_svg = d3v4.select("body").append("svg")
+    .attr("id","trace_svg")
+    .attr("width", trace_width)
+    .attr("height", trace_height)
+    .attr("font-family","sans-serif")
+    .attr("font-size","10")
+    .style("position", "absolute")
+    .style("top", "28px")
+    .style("left", parseInt(0.7 * window.innerWidth) + 8);
+
+var radial_margin = {top: 20, right: 20, bottom: 20, left: 20};
+var radial_height = parseInt(0.4 * window.innerHeight), 
+    radial_width = radial_height,
+    innerRadius = parseInt(0.2 * radial_height), 
+    outerRadius = Math.min(radial_width - radial_margin.left - radial_margin.right, radial_height - radial_margin.top - radial_margin.bottom) / 2;
+var radial_svg = d3.select("body").append("svg")
+    .attr("id","radial_svg")
+    .attr("width", radial_width)
+    .attr("height", radial_height)
+    .attr("font-family","sans-serif")
+    .attr("font-size","10")
+    .style("position", "absolute")
+    .style("top", parseInt(0.58 * window.innerHeight) - 48)
+    .style("left", parseInt(0.72 * window.innerWidth));
+</script>
+<script>
+//-------------------------------------------------------------radial chart----------------------------------------------------
+function radial_chart(filename){
+
+    radial_svg.selectAll("*").remove();
+    
+    var g = radial_svg.append("g")
+        .attr("transform", "translate(" + radial_width / 2 + "," + radial_height / 2 + ")");
+
+    var x = d3v4.scaleBand()
+       .range([0, 2 * Math.PI])
+        .align(0);
+
+    var y = d3v4.scaleRadial()
+        .range([innerRadius, outerRadius]);
+
+    var z = d3v4.scaleOrdinal()
+        .range(["#ffd92f", "#fc8d62", "#8da0cb", "#e78ac3"]);
+
+    d3v4.csv(filename, function(d, i, columns) {
+        for (i = 1, t = 0; i < columns.length; ++i) t += d[columns[i]] = +d[columns[i]];
+        d.total = t;
+        return d;
+    }, function(error, data) {
+        if (error) throw error;
+
+        x.domain(data.map(function(d) { return d.Date; }));
+        y.domain([0, d3v4.max(data, function(d) { return d.total; })]);
+        z.domain(data.columns.slice(1));
+
+        g.append("g")
+            .selectAll("g")
+            .data(d3v4.stack().keys(data.columns.slice(1))(data))
+            .enter().append("g")
+            .attr("fill", function(d) { return z(d.key); })
+            .selectAll("path")
+            .data(function(d) { return d; })
+            .enter().append("path")
+            .attr("d", d3v4.arc()
+                .innerRadius(function(d) { return y(d[0]); })
+                .outerRadius(function(d) { return y(d[1]); })
+                .startAngle(function(d) { return x(d.data.Date); })
+                .endAngle(function(d) { return x(d.data.Date) + x.bandwidth(); })
+                .padAngle(0.01)
+                .padRadius(innerRadius))
+            .on("mousedown",function(d,i){
+                let date = String(d.data.Date);
+                let date_str = date[0] + "-" + date[2] + date[3];
+                filename = "pro_day/pro_" + date_str + ".csv";
+                let date_str2 = date[0] + date[2] + date[3];
+                filename2 = "word_cloud/20170" + date_str2 + ".csv";
+                filename3 = "heatmap_data/20170" + date_str2 + ".csv";
+                filename4 = "trajectories/20170" + date_str2 + ".json";
+                theme_river(filename,"blue");
+                word_cloud(filename2);
+                heatmap_data(filename3);
+                trajectory_data(filename4);
+            });
+
+        var label = g.append("g")
+            .selectAll("g")
+            .data(data)
+            .enter().append("g")
+            .attr("text-anchor", "middle")
+            .attr("transform", function(d) { return "rotate(" + ((x(d.Date) + x.bandwidth() / 2) * 180 / Math.PI - 90) + ")translate(" + innerRadius + ",0)"; });
+
+        label.append("line")
+            .attr("x2", -5)
+            .attr("stroke", "#000");
+
+        label.append("text")
+            .attr("transform", function(d) { return (x(d.Date) + x.bandwidth() / 2 + Math.PI / 2) % (2 * Math.PI) < Math.PI ? "rotate(90)translate(0,-" + String(innerRadius * 1.3) + ")" : "rotate(-90)translate(0," + String(innerRadius * 1.3 + 8) + ")"; })
+            .text(function(d) { return d.Date; });
+
+        var yAxis = g.append("g")
+            .attr("text-anchor", "middle");
+
+        var yTick = yAxis
+            .selectAll("g")
+            .data(y.ticks(5).slice(1))
+            .enter().append("g");
+
+        yTick.append("circle")
+            .attr("fill", "none")
+            .attr("stroke", "#000")
+            .attr("r", y);
+
+        yTick.append("text")
+            .attr("y", function(d) { return -y(d); })
+            .attr("dy", "0.35em")
+            .attr("fill", "none")
+            .attr("stroke", "#fff")
+            .attr("stroke-width", 2)
+            .text(y.tickFormat(5, "s"));
+
+        yTick.append("text")
+            .attr("y", function(d) { return -y(d); })
+            .attr("dy", "0.35em")
+            .text(y.tickFormat(5, "s"));
+
+        yAxis.append("text")
+            .attr("y", function(d) { return -y(y.ticks(5).pop()); })
+            .attr("dy", "-2em")
+            .text("数量");
+
+        var legend = g.append("g")
+            .selectAll("g")
+            .data(data.columns.slice(1).reverse())
+            .enter().append("g")
+            .attr("transform", function(d, i) { return "translate(-40," + (i - (data.columns.length - 1) / 2) * 20 + ")"; });
+
+        legend.append("rect")
+            .attr("width", 36)
+            .attr("height", 18)
+            .attr("fill", z);
+
+        legend.append("text")
+            .attr("x", 38)
+            .attr("y", 9)
+            .attr("dy", "0.35em")
+            .text(function(d) { return d; });
+    });
+}
+radial_chart("time_line.csv");
+</script>
+<!-- map & trajectory -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.3.4/dist/leaflet.css" integrity="sha512-puBpdR0798OZvTTbP4A8Ix/l+A4dHDD0DGqYW6RQ+9jxkRFclaxxQb/SJAWZfWAkuyeQUytO7+7N4QKrDh+drA==" crossorigin=""/>
+<script src="https://unpkg.com/leaflet@1.3.4/dist/leaflet.js" integrity="sha512-nMMmRyTVoLYqjP9hrbed9S+FzjZHW5gY1TWCHA5ckwXZBadntCNs8kEqAWdrb9O7rxbCaA4lKTIWjDXZxflOcA==" crossorigin=""></script>
+<script src="heatmap.js"></script>
+<script src="leaflet-heatmap.js"></script>
+<script>
+    var map = L.map('map').setView([39.9, 116.5], 10);
+    var baseLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution: '© OpenStreetMap'}).addTo(map);
+    var heatLayer = new HeatmapOverlay({"radius": 0.005,
+                                        "maxOpacity": 0.5,
+                                        "scaleRadius": true,
+                                        "useLocalExtrema": false,
+                                        latField: 'lat',
+                                        lngField: 'lng',
+                                        valueField: 'count'}).addTo(map);
+    var labelLayer0 = new HeatmapOverlay({"radius": 0.005,
+                                        "maxOpacity": 0.5,
+                                        "scaleRadius": true,
+                                        "useLocalExtrema": false,
+                                        latField: 'lat',
+                                        lngField: 'lng',
+                                        valueField: 'count',
+                                        gradient: {'.95': '#ffd92f'}
+                                    });
+    var labelLayer1 = new HeatmapOverlay({"radius": 0.005,
+                                        "maxOpacity": 0.5,
+                                        "scaleRadius": true,
+                                        "useLocalExtrema": false,
+                                        latField: 'lat',
+                                        lngField: 'lng',
+                                        valueField: 'count',
+                                        gradient: {'.95': '#fc8d62'}
+                                    });
+    var labelLayer2 = new HeatmapOverlay({"radius": 0.005,
+                                        "maxOpacity": 0.5,
+                                        "scaleRadius": true,
+                                        "useLocalExtrema": false,
+                                        latField: 'lat',
+                                        lngField: 'lng',
+                                        valueField: 'count',
+                                        gradient: {'.95': '#8da0cb'}
+                                    });
+    var labelLayer3 = new HeatmapOverlay({"radius": 0.005,
+                                        "maxOpacity": 0.5,
+                                        "scaleRadius": true,
+                                        "useLocalExtrema": false,
+                                        latField: 'lat',
+                                        lngField: 'lng',
+                                        valueField: 'count',
+                                        gradient: {'.95': '#e78ac3'}
+                                    });
+
+    var geoJsonLayer = L.geoJson({'type': 'Point', 'coordinates': [116, 39.7]}, {style: {"color": "#404040", "weight": 3, "opacity": 0.7}}).addTo(map);
+    var heatMaps = {'heat map': heatLayer, '0': labelLayer0, '1': labelLayer1, '2': labelLayer2, '3': labelLayer3};
+    var layerControl = L.control.layers(null, heatMaps).addTo(map);
+    
+    var heatmap_data_storage;
+    var label_data_storage = Array(4);
+    var geoData = [];
+
+    var current_trajectory = -1;
+    var current_file = '';
+
+    function heatmap_data(filename3) {
+        heatmap_data_storage = Array(288);
+        for (i = 0; i < 4; i++) label_data_storage[i] = Array(288);
+        for (i = 0; i < 288; i++) {
+            delete heatmap_data_storage[i]
+            heatmap_data_storage[i] = new Array();
+            for (j = 0; j < 4; j++) {
+                delete label_data_storage[j][i]
+                label_data_storage[j][i] = new Array();
+            }
+        }
+
+        d3.csv(filename3, function(data) {
+            heatLayer.setData({'data': data});
+            temp_label_data = Array(4);
+            for (i = 0; i < 4; i++) temp_label_data[i] = Array();
+            data.forEach(function(line) {
+                temp_label_data[parseInt(line.label)].push(line);
+                heatmap_data_storage[parseInt(line.time)].push(line);
+                label_data_storage[parseInt(line.label)][parseInt(line.time)].push(line);
+            });
+            labelLayer0.setData({'data': temp_label_data[0]});
+            labelLayer1.setData({'data': temp_label_data[1]});
+            labelLayer2.setData({'data': temp_label_data[2]});
+            labelLayer3.setData({'data': temp_label_data[3]});
+        })
+    }
+    heatmap_data('heatmap_data/20170223.csv');
+
+    function heatmap_time(time) {
+        // console.log(time, heatmap_data_storage[time]);
+        heatLayer.setData({'data': heatmap_data_storage[time]})
+        labelLayer0.setData({'data': label_data_storage[0][time]});
+        labelLayer1.setData({'data': label_data_storage[1][time]});
+        labelLayer2.setData({'data': label_data_storage[2][time]});
+        labelLayer3.setData({'data': label_data_storage[3][time]});
+    }
+
+    function trajectory_data(filename4) {
+        current_file = filename4;
+        d3.json(filename4, function(data){
+            geoData = [];
+            current_trajectory = -1;
+            list = d3.select("#trajectory_list")
+            list.selectAll('*').remove()
+            data.forEach(function(value, index) {
+                coordinates = []
+                for (const key in value.pos) {
+                    coordinates.push([value.pos[key][1], value.pos[key][0]]);
+                }
+                geoData.push({'type': 'LineString', 'coordinates': coordinates});
+                trajectory_item = list.append("div")
+                                        .attr("id", index)
+                                        .attr("class", "trajectory-item box")
+                                        .on("mousedown", function(d, i) {
+                                            current_trajectory = index;
+                                            geoJsonLayer.clearLayers();
+                                            geoJsonLayer.addData(geoData[index]);
+
+                                            width = parseInt(0.7 * window.innerWidth) - 32;
+                                            height = parseInt(0.3 * window.innerHeight);
+                                            x = d3v3.time.scale().range([0, width]);
+                                            start_time = x(value.display[0][0] / 288);
+                                            end_time = x(value.display[value.display.length - 1][0] / 288);
+                                            console.log(start_time, end_time);
+                                            
+                                            d3.select("#theme_river_timeline")
+                                                .selectAll("rect").remove();
+                                            
+                                            d3.select("#theme_river_timeline")
+                                                .append("rect")
+                                                .attr("width", end_time - start_time)
+                                                .attr("height", 32)
+                                                .attr("y", height - 48)
+                                                .attr("x", start_time)
+                                                .style("border-radius", 8)
+                                                .attr("fill", "rgba(0, 0, 1, 0.2)");
+                                            
+                                            console.log(filename4.slice(13, 21));
+                                            trajectory(filename4.slice(13, 21), index);
+                                        });
+                label_function = (label) => {
+                    switch(label) {
+                        case 0:
+                            return '#ffd92f">票据推销';
+                        case 1:
+                            return '#fc8d62">色情欺诈';
+                        case 2:
+                            return '#8da0cb">卡贷诱骗';
+                        case 3:
+                            return '#e78ac3">商务广告';
+                    }
+                };
+                time_function = (time) => {
+                    h = Math.floor(time / 12);
+                    m = time * 5 - h * 60;
+                    if (m < 10)
+                        return String(h) + ':0' + String(m);
+                    return String(h) + ':' + String(m);
+                }
+                temp = '<span class="trajectory-icon">' + String(index + 1) + '</span><div><span class="trajectory-tag", style="background-color: ' + label_function(value.max_label) + '</span><br><span>数量:' + value.labels.reduce((partialSum, a) => partialSum + a, 0) + ' ' + time_function(value.display[0][0]) + '-' + time_function(value.display[value.display.length - 1][0]) + '</span></div>';
+                trajectory_item.html(temp);
+
+            })
+            geoJsonLayer.clearLayers();
+            geoJsonLayer.addData(geoData);
+        });
+    }
+    trajectory_data('trajectories/20170223.json');
+
+    function trajectory_time(index) {
+        d3.json(current_file, function(data){
+            trajectory = data[current_trajectory];
+            coordinates = []
+            point = []
+            for (let key in trajectory.pos) {
+                coordinates.push([trajectory.pos[key][1], trajectory.pos[key][0]]);
+                if (key == index) {
+                    point = [trajectory.pos[key][1], trajectory.pos[key][0]]
+                }
+            }
+            geoData = [];
+            geoData.push({'type': 'LineString', 'coordinates': coordinates});
+            geoData.push({'type': 'Point', 'coordinates': point});
+            // console.log(geoData);
+            geoJsonLayer.clearLayers();
+            geoJsonLayer.addData(geoData);
+        });
+    }
+    trajectory('20170223', 2);
+
+function trajectory(date, index){
+    d3 = d3v4;
+    var svg = d3.select("#trajectory_chart");
+    svg.selectAll('*').remove();
+    var margin = {top: 0, right: 0, bottom: 0, left: 0},
+        width = svg.node().getBoundingClientRect().width;
+        height = svg.node().getBoundingClientRect().height;
+        g = svg.append("g").attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+    var x = d3v4.scaleBand()
+        .rangeRound([0, width])
+
+    var y = d3v4.scaleLinear()
+        .rangeRound([height, 0]);
+
+    var z = d3v4.scaleOrdinal()
+        .range(["#ffd92f", "#fc8d62", "#8da0cb", "#e78ac3"]);
+
+    var filename = "trajectories_csv/" + String(date) + "/" + String(index) + ".csv";
+    d3v4.csv(filename, function(d, i, columns) {
+      for (i = 1, t = 0; i < columns.length; ++i) t += d[columns[i]] = +d[columns[i]];
+      d.total = t;
+      return d;
+    }, function(error, data) {
+      if (error) throw error;
+
+      var keys = data.columns.slice(1);
+
+      x.domain(data.map(function(d) { return d.time; }));
+      y.domain([0, d3.max(data, function(d) { return d.total; })]).nice();
+      z.domain(keys);
+
+      g.append("g")
+        .selectAll("g")
+        .data(d3v4.stack().keys(keys)(data))
+        .enter().append("g")
+          .attr("fill", function(d) { return z(d.key); })
+        .selectAll("rect")
+        .data(function(d) { return d; })
+        .enter().append("rect")
+          .attr("x", function(d) { return x(d.data.time); })
+          .attr("y", function(d) { return y(d[1]); })
+          .attr("height", function(d) { return y(d[0]) - y(d[1]); })
+          .attr("width", x.bandwidth());
+
+    });
+    var data;
+    filename2 = "trajectories/" + String(date) + ".json";
+    d3.json(filename2,function(jsondata){
+        console.log(jsondata[index].display)
+        data = jsondata[index].display
+        
+        let min = Infinity, max = -Infinity;
+        for (let i=0; i<data.length; i++){
+          if (data[i][1] > max) max = data[i][1];
+          if (data[i][1] < min) min = data[i][1];
+        }
+        y.domain([min,max]);
+        console.log(min,max)
+        var linePath=d3v3.svg.line()//创建一个直线生成器
+            .x(function(d){
+                return x(d[0]);
+            })
+            .y(function(d){
+                temp = d[1]/2 + (min+max)/4;
+                return y(temp);
+            })
+            .interpolate("Linear")//插值模式
+
+        var svg = d3.select("#trajectory_chart").selectAll("path")
+            .data(data)
+            .enter()
+            .append("path")
+            .attr("transform","translate("+margin.left+","+margin.top+")")
+            .attr("d",linePath(data))
+            .attr("fill","none")
+            .attr("stroke-width",2)
+            .attr("stroke","steelblue");
+        d3 = d3v3;
+    });
+}
+</script>
+
+<script src="https://d3js.org/d3.v3.min.js"></script>
+<script>
+    var d3v3 = window.d3;
+</script>
+<!-- theme river & word cloud -->
+<script src="d3.layout.cloud.js"></script>
+<script>
+//----------------------------------------------theme river ------------------------------------------------------
+function theme_river(csvpath, color) {
+    console.log(csvpath);
+    d3v3.select(".theme_river_chart").selectAll('*').remove()
+    var datearray = [];
+    var colorrange = [];
+    if (color == "blue") {
+        colorrange = ["#ffd92f", "#fc8d62", "#8da0cb", "#e78ac3"];
+    }
+    else if (color == "pink") {
+        colorrange = ["#980043", "#DD1C77", "#DF65B0", "#C994C7"];
+    }
+    else if (color == "orange") {
+        colorrange = ["#B30000", "#E34A33", "#FC8D59", "#FDBB84"];
+    }
+    strokecolor = colorrange[0];
+
+    var format = d3.time.format("%H/%M");
+
+    var margin = {top: 16, right: 16, bottom: 32, left: 16};
+    var width = parseInt(0.7 * window.innerWidth) - margin.left - margin.right;
+    var height = parseInt(0.3 * window.innerHeight) - margin.top - margin.bottom;
+
+    var tooltip = d3.select(".theme_river_chart")
+        .append("div")
+        .attr("class", "theme-river-tooltip")
+        .style("opacity", "0");
+
+    var x = d3.time.scale()
+        .range([0, width]);
+
+    var y = d3.scale.linear()
+        .range([height-10, 0]);
+
+    var z = d3.scale.ordinal()
+        .range(colorrange);
+
+    var xAxis = d3.svg.axis()
+        .scale(x)
+        .ticks(24)
+        .tickFormat(d3.time.format('%H'));
+
+    var yAxis = d3.svg.axis()
+        .scale(y);
+
+    var stack = d3.layout.stack()
+        .offset("silhouette")
+        .values(function(d) { return d.values; })
+        .x(function(d) { return d.date; })
+        .y(function(d) { return d.value; });
+
+    var nest = d3.nest()
+        .key(function(d) { return d.key; });
+
+    var area = d3.svg.area()
+        .interpolate("cardinal")
+        .x(function(d) { return x(d.date); })
+        .y0(function(d) { return y(d.y0); })
+        .y1(function(d) { return y(d.y0 + d.y); });
+
+    var svg = d3.select(".theme_river_chart").append("svg").attr("class", "box theme-river")
+        .attr("width", width + margin.left + margin.right)
+        .attr("height", height + margin.top + margin.bottom)
+        .attr("id","theme_river_timeline")
+        .append("g")
+        .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+        
+
+    var graph = d3.csv(csvpath, function(data) {
+        data.forEach(function(d) {
+        d.date = format.parse(d.date);
+        d.value = +d.value;
+        });
+
+        var layers = stack(nest.entries(data));
+        x.domain(d3.extent(data, function(d) { return d.date; }));
+        y.domain([0, d3.max(data, function(d) { return d.y0 + d.y; })]);
+
+        svg.selectAll(".layer")
+            .data(layers)
+        .enter().append("path")
+            .attr("class", "layer")
+            .attr("d", function(d) { return area(d.values); })
+            .style("fill", function(d, i) { return z(i); });
+
+
+        svg.append("g")
+            .attr("class", "x axis")
+            .attr("transform", "translate(0," + height + ")")
+            .call(xAxis);
+
+        // svg.append("g")
+        //     .attr("class", "y axis")
+        //     .attr("transform", "translate(" + width + ", 0)")
+        //     .call(yAxis.orient("right"));
+
+        // svg.append("g")
+        //     .attr("class", "y axis")
+        //     .call(yAxis.orient("left"))
+        //     ;
+
+        svg.selectAll(".layer")
+        .attr("opacity", 1)
+        .on("mouseover", function(d, i) {
+            svg.selectAll(".layer").transition()
+            .duration(250)
+            .attr("opacity", function(d, j) {
+            return j != i ? 0.1 : 1;
+        })})
+
+        .on("mousemove", function(d, i) {
+            mousex = d3.mouse(this);
+            mousex = mousex[0];
+            var invertedx = x.invert(mousex);
+
+            let hour = invertedx.getHours();
+            let mint = invertedx.getMinutes();
+            let t = parseInt(hour)*60 + parseInt(mint);
+            let mousedate;
+            for (let k = 0; k < d.values.length; k++) {
+                let t_cmp = parseInt(d.values[k].date.getHours())*60 + parseInt(d.values[k].date.getMinutes());
+                if(Math.abs(t - t_cmp <= 2)){mousedate = k;break;}
+            }
+
+            pro = d.values[mousedate].value;
+
+            d3.select(this)
+            .classed("hover", true)
+            .attr("stroke", strokecolor)
+            .attr("stroke-width", "0.5px"), 
+            tooltip.html( "<p>" + d.key + "</p>" ).style("opacity", "1");
+            tooltip.html( "<p>" + d.key + "<br>" + pro + "</p>" ).style("opacity", "1");
+        })
+        .on("mouseout", function(d, i) {
+            svg.selectAll(".layer")
+                .transition()
+                .duration(250)
+                .attr("opacity", "1");
+                d3.select(this)
+                .classed("hover", false)
+                .attr("stroke-width", "0px"), tooltip.html( "<p>" + d.key + "<br>" + pro + "</p>" ).style("opacity", "0");
+        })
+        
+        
+        var vertical = d3.select(".theme_river_chart")
+            .append("div")
+            .attr("class", "remove")
+            .style("position", "relative")
+            .style("z-index", "19")
+            .style("width", "2px")
+            .style("height", String(height + margin.top + margin.bottom) + "px")
+            .style("top", "-" + String(height + margin.top + margin.bottom) + "px")
+            .style("bottom", "30px")
+            .style("left", "0px")
+            .style("background", "rgba(0, 0, 0, 0.2)")
+            .style("display", "none");
+
+        d3.select(".theme_river_chart")
+            .on("mousemove", function(){  
+            mousex = d3.mouse(this);
+            mousex = mousex[0] + 5;
+            vertical.style("left", mousex + "px" ).style("display", "block")})
+            .on("mouseover", function(){  
+            mousex = d3.mouse(this);
+            mousex = mousex[0] + 5;
+            vertical.style("left", mousex + "px").style("display", "block")})
+            .on("mouseout", function() {
+            vertical.style("display", "none")})
+            .on("mousedown", function(d, i) {
+                mousex = d3.mouse(this);
+                mousex = mousex[0] - 40;
+                var invertedx = x.invert(mousex);
+
+                let hour = invertedx.getHours();
+                let mint = invertedx.getMinutes();
+                let t = parseInt(hour)*60 + parseInt(mint);
+                
+                heatmap_time(parseInt(t / 5));
+                trajectory_time(parseInt(t / 5))
+            });
+    });
+}
+theme_river('pro_day/pro_2-23.csv', 'blue')
+// ----------------------------------------------word cloud--------------------------------------------------
+function word_cloud(filename){
+
+    trace_svg.selectAll("*").remove();
+
+    trace_svg.attr("id","trace_svg")
+        .attr("width", trace_width + 32)
+        .attr("height", trace_height)
+        .attr("font-family","sans-serif")
+        .attr("font-size","10");
+        
+    var word_cloud_data = new Array(200);
+    for (let i=0; i<200; i++){
+        word_cloud_data[i] = {"text":"","size":0,"label":""};
+    }
+
+    d3v3.csv(filename,function(logData){
+        let frequency = 0;
+        for (let i=0; i<logData.length; i++){
+            frequency += parseInt(logData[i].frequency);
+        }
+        for (let i=0; i<logData.length; i++){
+            word_cloud_data[i].text = logData[i].word;
+            word_cloud_data[i].size = 1000.0 * logData[i].frequency / frequency;
+            word_cloud_data[i].label = logData[i].label;
+        }
+        
+        d3v3.layout.cloud().size([1.4 * trace_width, 1.5 * trace_width])
+                .words(word_cloud_data)
+                .rotate(0)
+                .fontSize(function(d) { return d.size; })
+                .on("end", draw)
+                .start();
+
+        function draw(words) {
+
+            trace_svg.attr("class", "wordcloud")
+            .append("g")
+            .attr("transform", "translate(200,200)")
+            .selectAll("text")
+            .data(words)
+            .enter().append("text")
+            .style("font-size", function(d) { return d.size * 1.4 + "px"; })
+            .style("fill", function(d) { 
+                switch (d.label){
+                    case "0":
+                        return "#ffd92f"
+                    case "1":
+                        return "#fc8d62"
+                    case "2":
+                        return "#8da0cb"
+                    case "3":
+                        return "#e78ac3"
+                }
+            })
+            .attr("transform", function(d) {
+                return "translate(" + [d.x, d.y] + ")rotate(" + d.rotate + ")";
+            })
+            .text(function(d) { return d.text; });
+        }
+    })
+}
+word_cloud("word_cloud/20170223.csv")
+</script>
+</html>
